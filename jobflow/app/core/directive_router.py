@@ -8,6 +8,7 @@ This is a simple lookup layer with no logic, parsing, or LLM calls.
 # Directive to pipeline mapping
 DIRECTIVE_TO_PIPELINE = {
     "job_discovery": "job_discovery",
+    "batch_run": "batch_candidate_processing",
 }
 
 

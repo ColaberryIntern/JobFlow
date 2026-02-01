@@ -48,10 +48,12 @@ def run_pipeline(pipeline_name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     if pipeline_name == "job_discovery":
         return _run_job_discovery_pipeline(payload)
+    elif pipeline_name == "batch_candidate_processing":
+        return _run_batch_candidate_processing_pipeline(payload)
     else:
         raise PipelineNotFoundError(
             f"Unknown pipeline: {pipeline_name}. "
-            f"Supported pipelines: job_discovery"
+            f"Supported pipelines: job_discovery, batch_candidate_processing"
         )
 
 
@@ -85,4 +87,38 @@ def _run_job_discovery_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         raise PipelineExecutionError(
             f"Job discovery pipeline failed: {str(e)}"
+        ) from e
+
+
+def _run_batch_candidate_processing_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Run the batch candidate processing pipeline.
+
+    Processes multiple candidate folders through the job discovery workflow
+    with approval-gated execution.
+
+    Args:
+        payload: Dict with candidates_dir, jobs, out, match_jobs
+
+    Returns:
+        Batch processing results with counts and file paths
+
+    Raises:
+        PipelineExecutionError: If batch processing fails
+    """
+    try:
+        # Import and call the pipeline entrypoint
+        from pipelines.batch_candidate_processing import run
+
+        result = run(payload)
+
+        return {
+            "status": "success",
+            "pipeline": "batch_candidate_processing",
+            "data": result,
+        }
+
+    except Exception as e:
+        raise PipelineExecutionError(
+            f"Batch candidate processing pipeline failed: {str(e)}"
         ) from e

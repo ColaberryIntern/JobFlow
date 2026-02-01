@@ -64,7 +64,7 @@ def test_execute_from_directive_requires_approval_parameter(mock_openai_response
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             # Missing approval parameter should raise TypeError
@@ -80,7 +80,7 @@ def test_execute_from_directive_rejects_invalid_approval(mock_openai_response):
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             # Invalid approval (not a dict)
@@ -100,7 +100,7 @@ def test_execute_from_directive_rejects_approval_missing_keys(
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             # Approval missing plan_hash
@@ -135,7 +135,7 @@ def test_execute_from_directive_rejects_mismatched_plan_hash(
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             with pytest.raises(PlanRejectedError) as exc_info:
@@ -158,7 +158,7 @@ def test_execute_from_directive_succeeds_with_valid_approval(
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch("jobflow.app.core.plan_executor.run_pipeline") as mock_run_pipeline:
             mock_run_pipeline.return_value = mock_orchestrator_result
@@ -190,7 +190,7 @@ def test_execute_from_directive_preserves_rejection_reason(mock_openai_response)
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             # Use invalid approval with wrong type for plan_hash
@@ -225,7 +225,7 @@ def test_execute_from_directive_with_payload(
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch("jobflow.app.core.plan_executor.run_pipeline") as mock_run_pipeline:
             mock_run_pipeline.return_value = mock_orchestrator_result
@@ -252,7 +252,7 @@ def test_execute_from_directive_includes_plan_metadata(
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch("jobflow.app.core.plan_executor.run_pipeline") as mock_run_pipeline:
             mock_run_pipeline.return_value = mock_orchestrator_result
@@ -308,7 +308,7 @@ def test_execute_from_directive_no_execution_without_valid_approval(
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch("jobflow.app.core.plan_executor.run_pipeline") as mock_run_pipeline:
             with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
@@ -340,7 +340,7 @@ def test_execute_from_directive_invalid_scope_rejected(
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             with pytest.raises(PlanRejectedError) as exc_info:
@@ -362,7 +362,7 @@ def test_execute_from_directive_default_payload(
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch("jobflow.app.core.plan_executor.run_pipeline") as mock_run_pipeline:
             mock_run_pipeline.return_value = mock_orchestrator_result
@@ -387,7 +387,7 @@ def test_execute_from_directive_approval_metadata_structure(
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch("jobflow.app.core.plan_executor.run_pipeline") as mock_run_pipeline:
             mock_run_pipeline.return_value = mock_orchestrator_result

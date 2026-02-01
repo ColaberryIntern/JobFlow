@@ -57,7 +57,7 @@ def test_review_directive_rejected_by_default(mock_openai_response):
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             result = review_directive("job_discovery")
@@ -85,7 +85,7 @@ def test_review_directive_approved_with_auto_approve(mock_openai_response):
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             result = review_directive("job_discovery", auto_approve=True)
@@ -116,7 +116,7 @@ def test_review_directive_policy_failure_with_risks():
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_response
+        mock_client.chat.completions.create.return_value = mock_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             result = review_directive("job_discovery", auto_approve=True)
@@ -147,7 +147,7 @@ def test_review_directive_policy_failure_with_forbidden_keywords():
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_response
+        mock_client.chat.completions.create.return_value = mock_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             result = review_directive("job_discovery", auto_approve=True)
@@ -175,7 +175,7 @@ def test_review_directive_policy_failure_with_non_allowlisted_pipeline():
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_response
+        mock_client.chat.completions.create.return_value = mock_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             result = review_directive("job_discovery", auto_approve=True)
@@ -198,7 +198,7 @@ def test_review_directive_never_calls_orchestrator(mock_openai_response):
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         if orchestrator_available:
             with patch("jobflow.app.core.orchestrator.run_pipeline") as mock_run_pipeline:
@@ -244,7 +244,7 @@ def test_review_directive_returns_complete_plan(mock_openai_response):
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             result = review_directive("job_discovery")
@@ -267,7 +267,7 @@ def test_review_directive_no_side_effects(mock_openai_response):
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             # Call multiple times
@@ -296,7 +296,7 @@ def test_review_directive_result_structure():
     with patch("jobflow.app.services.planner.OpenAI") as mock_openai_class:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_response
+        mock_client.chat.completions.create.return_value = mock_response
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
             result = review_directive("job_discovery")

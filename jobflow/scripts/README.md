@@ -159,6 +159,82 @@ else
 fi
 ```
 
+### Approval-Gated Batch Execution
+
+For production use, batch processing should go through the approval framework to ensure proper oversight and auditability.
+
+#### 3-Command Flow
+
+**1. Review the Plan**
+
+```bash
+# Review the batch_run directive and generate an execution plan
+python -m jobflow.scripts.review_directive batch_run \
+  --auto-approve
+
+# Or review manually without auto-approval
+python -m jobflow.scripts.review_directive batch_run
+```
+
+This generates:
+- Execution plan based on the `directives/batch_run.md` specification
+- Risk assessment
+- Approval artifact (if auto-approved or approved via policy)
+
+**2. Approve the Plan** (if not auto-approved)
+
+```bash
+# Approve the plan manually
+python -m jobflow.scripts.approve_plan \
+  --plan-file ./plan.json \
+  --approved-by "alice@example.com"
+```
+
+**3. Execute with Approval**
+
+```bash
+# Execute the approved plan with payload
+python -m jobflow.scripts.execute \
+  --directive batch_run \
+  --approval approval.json \
+  --payload payload.json
+```
+
+Where `payload.json` contains:
+```json
+{
+  "candidates_dir": "./data/candidates",
+  "jobs": "./data/jobs.json",
+  "out": "./results/batch_2026_02_01",
+  "match_jobs": true
+}
+```
+
+#### Why Use Approval-Gated Execution?
+
+- **Auditability**: Every execution is cryptographically tied to an approval artifact
+- **Oversight**: Plans are reviewed before execution
+- **Safety**: Prevents unauthorized batch processing of candidate data
+- **Compliance**: Ensures proper authorization for processing PII
+- **Traceability**: Approval artifacts include who approved, when, and what scope
+
+#### Approval Scopes
+
+- `single-run` (default): Approval intended for one execution
+- `session`: Approval valid for multiple executions in the same session
+
+Note: Single-run enforcement (blocking reuse) is not yet implemented. Both scopes currently allow reuse.
+
+#### Direct CLI vs Approval-Gated
+
+| Feature | Direct CLI | Approval-Gated |
+|---------|-----------|----------------|
+| Convenience | High - one command | Medium - 3 commands |
+| Auditability | None | Full audit trail |
+| Authorization | None | Required |
+| Production Use | Development only | Recommended |
+| Compliance | No | Yes |
+
 ### Notes
 
 - Processing is deterministic: same inputs always produce same outputs

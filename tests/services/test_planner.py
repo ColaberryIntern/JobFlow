@@ -52,21 +52,21 @@ def test_build_plan_success(mock_env_with_api_key, mock_openai_response):
         # Setup mock
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         # Call function
         result = build_plan("job_discovery")
 
         # Verify OpenAI was called
         assert mock_openai_class.called
-        assert mock_client.responses.create.called
+        assert mock_client.chat.completions.create.called
 
         # Verify API key was used
         mock_openai_class.assert_called_once_with(api_key="test-api-key-12345")
 
         # Verify model parameter
-        call_args = mock_client.responses.create.call_args
-        assert call_args.kwargs["model"] == "gpt-4.1"
+        call_args = mock_client.chat.completions.create.call_args
+        assert call_args.kwargs["model"] == "gpt-4o"
 
         # Verify result structure
         assert isinstance(result, dict)
@@ -83,13 +83,13 @@ def test_build_plan_includes_directive_content(mock_env_with_api_key, mock_opena
         # Setup mock
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.return_value = mock_openai_response
+        mock_client.chat.completions.create.return_value = mock_openai_response
 
         # Call function
         build_plan("job_discovery")
 
         # Get the messages sent to OpenAI
-        call_args = mock_client.responses.create.call_args
+        call_args = mock_client.chat.completions.create.call_args
         messages = call_args.kwargs["messages"]
 
         # Verify messages structure
@@ -136,7 +136,7 @@ def test_build_plan_invalid_json_response(mock_env_with_api_key):
         mock_response.choices = [Mock()]
         mock_response.choices[0].message = Mock()
         mock_response.choices[0].message.content = "This is not valid JSON"
-        mock_client.responses.create.return_value = mock_response
+        mock_client.chat.completions.create.return_value = mock_response
 
         with pytest.raises(RuntimeError) as exc_info:
             build_plan("job_discovery")
@@ -159,7 +159,7 @@ def test_build_plan_missing_required_keys(mock_env_with_api_key):
             "steps": ["step1"]
             # Missing: risks, assumptions
         })
-        mock_client.responses.create.return_value = mock_response
+        mock_client.chat.completions.create.return_value = mock_response
 
         with pytest.raises(RuntimeError) as exc_info:
             build_plan("job_discovery")
@@ -175,7 +175,7 @@ def test_build_plan_api_error(mock_env_with_api_key):
         # Setup mock to raise an exception
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
-        mock_client.responses.create.side_effect = Exception("API connection failed")
+        mock_client.chat.completions.create.side_effect = Exception("API connection failed")
 
         with pytest.raises(RuntimeError) as exc_info:
             build_plan("job_discovery")
