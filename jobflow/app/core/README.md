@@ -39,3 +39,12 @@ Frozen dataclass for candidate-job match results with validation. Contains overa
 
 ### job_matcher.py
 Deterministic candidate-to-job matching engine with dimension-based scoring. Computes skills overlap (45%), title alignment (25%), location alignment (15%), and seniority alignment (15%) to produce weighted overall score with explainable reasons. Normalizes keywords, extracts technical terms, and generates stable match results.
+
+### candidate_folder_loader.py
+Candidate folder ingestion loader. Loads complete candidate profiles from local folders containing application info (XLSX) and resume files. Orchestrates parsing, merges skills from application and resume, and produces normalized CandidateProfile instances for job discovery pipeline.
+
+### resume_parser.py
+Resume text extraction and skill detection (stdlib only). Extracts text from .txt, .md, and .docx files (no .doc support). Deterministic skill extraction using built-in keyword dictionary and pattern matching for technical terms and acronyms.
+
+### xlsx_kv_reader.py
+XLSX key-value reader using stdlib only. Reads application info spreadsheets with column A = keys, column B = values. Parses XLSX as ZIP with XML using zipfile and ElementTree. Handles shared strings and numeric values.

@@ -29,6 +29,7 @@ class CandidateProfile:
     work_authorization: str = ""
     preferred_locations: list[str] = field(default_factory=list)
     remote_ok: bool | None = None
+    sponsorship_needed: bool | None = None
     resume_text: str = ""
     raw: dict = field(default_factory=dict)
 
@@ -111,6 +112,12 @@ class CandidateProfile:
         )
         remote_ok = cls._parse_bool(remote_raw) if remote_raw is not None else None
 
+        # Normalize sponsorship_needed
+        sponsorship_raw = cls._get_first_value(
+            raw, ["sponsorship_needed", "needs_sponsorship", "visa_sponsorship"], default=None
+        )
+        sponsorship_needed = cls._parse_bool(sponsorship_raw) if sponsorship_raw is not None else None
+
         # Normalize resume_text
         resume = cls._get_first_value(
             raw, ["resume_text", "resume"], default=""
@@ -131,6 +138,7 @@ class CandidateProfile:
             work_authorization=work_authorization,
             preferred_locations=preferred_locations,
             remote_ok=remote_ok,
+            sponsorship_needed=sponsorship_needed,
             resume_text=resume_text,
             raw=raw_copy,
         )

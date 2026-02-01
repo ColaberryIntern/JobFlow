@@ -78,15 +78,21 @@ def get_pipeline_definition():
 # ==============================================================================
 
 
-def run_job_discovery(candidate_or_query, sources: list, match_jobs: bool = False) -> dict:
+def run_job_discovery(
+    candidate_or_query=None,
+    sources: list = None,
+    match_jobs: bool = False,
+    candidate_folder: str = None
+) -> dict:
     """
     Execute job discovery pipeline for a candidate.
 
     Orchestrates the complete job discovery workflow:
-    1. Build search query from candidate profile (or use provided query)
-    2. Aggregate jobs from multiple sources
-    3. (Optional) Match and rank jobs by fit score
-    4. Return structured results with jobs and errors
+    1. (Optional) Load candidate profile from folder
+    2. Build search query from candidate profile (or use provided query)
+    3. Aggregate jobs from multiple sources
+    4. (Optional) Match and rank jobs by fit score
+    5. Return structured results with jobs and errors
 
     This is a deterministic, pure function with no side effects.
     All I/O is delegated to the provided JobSource implementations.
@@ -97,8 +103,11 @@ def run_job_discovery(candidate_or_query, sources: list, match_jobs: bool = Fals
             - dict with CandidateProfile fields (full_name, email, etc.)
             - dict with SearchQuery fields (titles, keywords, etc.) [legacy]
             - dict with old-style fields (desired_title, skills_years, etc.) [legacy]
+            - None if using candidate_folder parameter
         sources: List of JobSource implementations to aggregate from
         match_jobs: If True, match and rank jobs by fit score (default False)
+        candidate_folder: Path to folder containing application info and resume
+                          (if provided, overrides candidate_or_query)
 
     Returns:
         Dict containing:
@@ -108,6 +117,7 @@ def run_job_discovery(candidate_or_query, sources: list, match_jobs: bool = Fals
         - errors: List of error dicts from aggregation
         - counts: Dict with "jobs" and "errors" counts
         - matches: (if match_jobs=True) List of match result dicts, sorted by score
+        - candidate: (if candidate_folder provided) Dict with candidate summary
 
     Example (new style):
         >>> from jobflow.app.core.candidate_profile import CandidateProfile
@@ -128,6 +138,13 @@ def run_job_discovery(candidate_or_query, sources: list, match_jobs: bool = Fals
         ... }
         >>> result = run_job_discovery(candidate, [source])
 
+    Example (with candidate folder):
+        >>> result = run_job_discovery(
+        ...     sources=[source],
+        ...     candidate_folder="path/to/candidate/folder",
+        ...     match_jobs=True
+        ... )
+
     Example (with matching):
         >>> result = run_job_discovery(candidate, [source], match_jobs=True)
         >>> for match in result["matches"]:
@@ -137,6 +154,14 @@ def run_job_discovery(candidate_or_query, sources: list, match_jobs: bool = Fals
     from jobflow.app.core.candidate_query_builder import build_search_query
     from jobflow.app.core.job_aggregator import JobAggregator
     from jobflow.app.core.search_query import build_job_query
+
+    # Step 0: Load candidate from folder if provided
+    if candidate_folder is not None:
+        from jobflow.app.core.candidate_folder_loader import load_candidate_profile
+        candidate_profile = load_candidate_profile(candidate_folder)
+        candidate_or_query = candidate_profile
+    else:
+        candidate_profile = None
 
     # Step 1: Build search query (handle multiple input formats)
     query = _build_query_from_input(candidate_or_query)
@@ -160,13 +185,23 @@ def run_job_discovery(candidate_or_query, sources: list, match_jobs: bool = Fals
         },
     }
 
+    # Include candidate summary if loaded from folder
+    if candidate_profile is not None:
+        result["candidate"] = {
+            "name": candidate_profile.full_name,
+            "email": candidate_profile.email,
+            "location": candidate_profile.location,
+            "desired_titles": candidate_profile.desired_titles,
+            "skills": candidate_profile.skills[:10],  # Top 10 skills
+        }
+
     # Step 5: (Optional) Match and rank jobs
     if match_jobs:
         # Convert candidate to profile dict for matching
-        candidate_profile = _normalize_candidate_for_matching(candidate_or_query)
+        candidate_for_matching = _normalize_candidate_for_matching(candidate_or_query)
 
         # Match each job and collect results
-        matches = _match_and_rank_jobs(candidate_profile, jobs)
+        matches = _match_and_rank_jobs(candidate_for_matching, jobs)
 
         result["matches"] = matches
         result["counts"]["matches"] = len(matches)
