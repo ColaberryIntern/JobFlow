@@ -64,6 +64,19 @@ Examples:
         help="Disable job matching (only aggregate jobs, no scoring)",
     )
 
+    parser.add_argument(
+        "--no-apply-pack",
+        action="store_true",
+        help="Disable apply pack exports (JSON/CSV submission-ready outputs)",
+    )
+
+    parser.add_argument(
+        "--top-n",
+        type=int,
+        default=25,
+        help="Number of top jobs to include in apply packs (default: 25)",
+    )
+
     args = parser.parse_args(argv)
 
     try:
@@ -106,12 +119,15 @@ Examples:
 
         # Run batch processing
         match_jobs = not args.no_match
+        export_apply_packs = not args.no_apply_pack
 
         batch_result = run_batch(
             candidates_dir=str(candidates_dir),
             job_sources=[job_source],
             out_dir=args.out,
             match_jobs=match_jobs,
+            export_apply_packs=export_apply_packs,
+            top_n=args.top_n,
         )
 
         # Build output
@@ -121,6 +137,8 @@ Examples:
             "jobs_file": str(jobs_file.absolute()),
             "output_dir": str(Path(args.out).absolute()),
             "match_jobs": match_jobs,
+            "export_apply_packs": export_apply_packs,
+            "top_n": args.top_n,
             "processed": batch_result["processed"],
             "succeeded": batch_result["succeeded"],
             "failed": batch_result["failed"],
@@ -128,6 +146,10 @@ Examples:
             "errors_path": batch_result["errors_path"],
             "results_dir": batch_result["results_dir"],
         }
+
+        # Include apply packs dir if enabled
+        if "apply_packs_dir" in batch_result:
+            result["apply_packs_dir"] = batch_result["apply_packs_dir"]
 
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0

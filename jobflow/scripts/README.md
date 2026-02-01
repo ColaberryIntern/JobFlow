@@ -235,6 +235,86 @@ Note: Single-run enforcement (blocking reuse) is not yet implemented. Both scope
 | Production Use | Development only | Recommended |
 | Compliance | No | Yes |
 
+### Submission-Ready Outputs (Apply Packs)
+
+By default, batch processing generates **apply packs** - submission-ready exports for each candidate.
+
+#### What Are Apply Packs?
+
+Apply packs transform job discovery results into actionable application packets containing:
+- Top N job matches (default: 25)
+- Candidate information
+- Match scores and decisions
+- Pre-submission checklist
+
+#### Output Structure
+
+```
+output/
+├── apply_packs/
+│   ├── anusha_kayam/
+│   │   ├── applications_ready.json    # Full apply pack
+│   │   └── applications_ready.csv     # Spreadsheet format
+│   └── john_doe/
+│       ├── applications_ready.json
+│       └── applications_ready.csv
+├── results/                            # Detailed discovery results
+├── summary.csv                         # Batch summary with fit counts
+└── errors.json
+```
+
+#### CSV Format
+
+The `applications_ready.csv` file contains:
+
+| Column | Description |
+|--------|-------------|
+| rank | Application ranking (1-N) |
+| score | Match score (0-100) |
+| decision | strong_fit / possible_fit / weak_fit |
+| company | Company name |
+| job_title | Job title |
+| location | Job location |
+| apply_url | Application URL |
+| source | Job source identifier |
+| reasons | Match reasons (semicolon-separated) |
+| matched_keywords | Matched skills/keywords (semicolon-separated) |
+| missing_keywords | Missing skills/keywords (semicolon-separated) |
+
+#### Usage
+
+```bash
+# Default: apply packs enabled, top 25 jobs
+python -m jobflow.scripts.batch_run \
+  --candidates-dir ./candidates \
+  --jobs ./jobs.json \
+  --out ./results
+
+# Custom top N
+python -m jobflow.scripts.batch_run \
+  --candidates-dir ./candidates \
+  --jobs ./jobs.json \
+  --out ./results \
+  --top-n 50
+
+# Disable apply packs
+python -m jobflow.scripts.batch_run \
+  --candidates-dir ./candidates \
+  --jobs ./jobs.json \
+  --out ./results \
+  --no-apply-pack
+```
+
+#### Workflow
+
+1. Review `applications_ready.csv` in Excel/Sheets
+2. Filter by `decision == "strong_fit"`
+3. Check `apply_url` for each application
+4. Add notes in spreadsheet
+5. Submit applications
+
+The CSV format allows easy sorting, filtering, and tracking in spreadsheet software.
+
 ### Notes
 
 - Processing is deterministic: same inputs always produce same outputs

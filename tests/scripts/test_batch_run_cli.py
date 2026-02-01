@@ -239,3 +239,79 @@ def test_batch_run_cli_returns_int(tmp_path, monkeypatch):
 
     assert isinstance(exit_code, int)
     assert exit_code == 0
+
+
+def test_batch_run_cli_with_top_n_flag(tmp_path, monkeypatch, capsys):
+    """Test CLI with --top-n flag."""
+    from jobflow.scripts.batch_run import main
+
+    candidates_dir = Path(__file__).parent.parent / "fixtures" / "candidates"
+    jobs_file = Path(__file__).parent.parent / "fixtures" / "jobs_sample.json"
+    out_dir = tmp_path / "output"
+
+    argv = [
+        "--candidates-dir", str(candidates_dir),
+        "--jobs", str(jobs_file),
+        "--out", str(out_dir),
+        "--top-n", "15",
+    ]
+
+    exit_code = main(argv)
+
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+
+    assert result["top_n"] == 15
+
+
+def test_batch_run_cli_with_no_apply_pack_flag(tmp_path, monkeypatch, capsys):
+    """Test CLI with --no-apply-pack flag."""
+    from jobflow.scripts.batch_run import main
+
+    candidates_dir = Path(__file__).parent.parent / "fixtures" / "candidates"
+    jobs_file = Path(__file__).parent.parent / "fixtures" / "jobs_sample.json"
+    out_dir = tmp_path / "output"
+
+    argv = [
+        "--candidates-dir", str(candidates_dir),
+        "--jobs", str(jobs_file),
+        "--out", str(out_dir),
+        "--no-apply-pack",
+    ]
+
+    exit_code = main(argv)
+
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+
+    assert result["export_apply_packs"] is False
+    assert "apply_packs_dir" not in result
+
+
+def test_batch_run_cli_default_apply_packs_enabled(tmp_path, monkeypatch, capsys):
+    """Test that apply packs are enabled by default."""
+    from jobflow.scripts.batch_run import main
+
+    candidates_dir = Path(__file__).parent.parent / "fixtures" / "candidates"
+    jobs_file = Path(__file__).parent.parent / "fixtures" / "jobs_sample.json"
+    out_dir = tmp_path / "output"
+
+    argv = [
+        "--candidates-dir", str(candidates_dir),
+        "--jobs", str(jobs_file),
+        "--out", str(out_dir),
+    ]
+
+    exit_code = main(argv)
+
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+
+    assert result["export_apply_packs"] is True
+    assert "apply_packs_dir" in result

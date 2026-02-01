@@ -368,3 +368,117 @@ def test_run_batch_deterministic(tmp_path):
         assert r1["candidate_id"] == r2["candidate_id"]
         assert r1["num_jobs"] == r2["num_jobs"]
         assert r1["num_matches"] == r2["num_matches"]
+
+
+def test_run_batch_with_apply_packs(tmp_path):
+    """Test that batch run creates apply pack outputs."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidates_dir = Path(__file__).parent.parent / "fixtures" / "candidates"
+    jobs_file = Path(__file__).parent.parent / "fixtures" / "jobs_sample.json"
+    out_dir = tmp_path / "output"
+
+    source = FileJobSource("jobs", str(jobs_file))
+
+    result = run_batch(
+        candidates_dir=str(candidates_dir),
+        job_sources=[source],
+        out_dir=str(out_dir),
+        match_jobs=True,
+        export_apply_packs=True,
+        top_n=10,
+    )
+
+    # Verify apply_packs_dir in result
+    assert "apply_packs_dir" in result
+    apply_packs_dir = Path(result["apply_packs_dir"])
+    assert apply_packs_dir.exists()
+
+    # Verify apply pack files exist for Anusha
+    candidate_dirs = list(apply_packs_dir.iterdir())
+    assert len(candidate_dirs) >= 1
+
+    # Check one candidate's apply pack
+    candidate_dir = candidate_dirs[0]
+    assert (candidate_dir / "applications_ready.json").exists()
+    assert (candidate_dir / "applications_ready.csv").exists()
+
+    # Verify JSON structure
+    with open(candidate_dir / "applications_ready.json", "r", encoding="utf-8") as f:
+        pack = json.load(f)
+
+    assert "candidate" in pack
+    assert "applications" in pack
+    assert "checklist" in pack
+    assert pack["top_n"] <= 10
+
+    # Verify CSV has content
+    with open(candidate_dir / "applications_ready.csv", "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        csv_rows = list(reader)
+
+    assert len(csv_rows) == len(pack["applications"])
+
+
+def test_run_batch_no_apply_packs(tmp_path):
+    """Test that batch run skips apply packs when disabled."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidates_dir = Path(__file__).parent.parent / "fixtures" / "candidates"
+    jobs_file = Path(__file__).parent.parent / "fixtures" / "jobs_sample.json"
+    out_dir = tmp_path / "output"
+
+    source = FileJobSource("jobs", str(jobs_file))
+
+    result = run_batch(
+        candidates_dir=str(candidates_dir),
+        job_sources=[source],
+        out_dir=str(out_dir),
+        match_jobs=True,
+        export_apply_packs=False,
+    )
+
+    # Verify no apply_packs_dir in result
+    assert "apply_packs_dir" not in result
+
+    # Verify no apply_packs directory created
+    out_path = Path(out_dir)
+    assert not (out_path / "apply_packs").exists()
+
+
+def test_run_batch_summary_has_fit_counts(tmp_path):
+    """Test that summary CSV includes fit count columns when apply packs enabled."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidates_dir = Path(__file__).parent.parent / "fixtures" / "candidates"
+    jobs_file = Path(__file__).parent.parent / "fixtures" / "jobs_sample.json"
+    out_dir = tmp_path / "output"
+
+    source = FileJobSource("jobs", str(jobs_file))
+
+    result = run_batch(
+        candidates_dir=str(candidates_dir),
+        job_sources=[source],
+        out_dir=str(out_dir),
+        match_jobs=True,
+        export_apply_packs=True,
+    )
+
+    # Verify summary CSV has new columns
+    with open(result["summary_path"], "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+
+    assert len(rows) >= 1
+    row = rows[0]
+
+    # Verify new columns exist
+    assert "num_strong_fit" in row
+    assert "num_possible_fit" in row
+    assert "num_weak_fit" in row
+    assert "top_score" in row
+
+    # Verify values are numbers or empty
+    assert row["num_strong_fit"].isdigit() or row["num_strong_fit"] == ""
+    assert row["num_possible_fit"].isdigit() or row["num_possible_fit"] == ""
+    assert row["num_weak_fit"].isdigit() or row["num_weak_fit"] == ""

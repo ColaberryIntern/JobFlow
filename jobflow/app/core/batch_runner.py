@@ -51,7 +51,9 @@ def run_batch(
     candidates_dir: str,
     job_sources: list,
     out_dir: str,
-    match_jobs: bool = True
+    match_jobs: bool = True,
+    export_apply_packs: bool = True,
+    top_n: int = 25
 ) -> dict:
     """
     Run batch candidate processing.
@@ -60,12 +62,15 @@ def run_batch(
     - Per-candidate results JSON files
     - Summary CSV with key metrics
     - Errors JSON with any failures
+    - Apply packs with submission-ready outputs (optional)
 
     Args:
         candidates_dir: Directory containing candidate folders
         job_sources: List of JobSource instances for job aggregation
         out_dir: Output directory for results
         match_jobs: Whether to compute match scores (default True)
+        export_apply_packs: Whether to generate apply pack exports (default True)
+        top_n: Number of top jobs to include in apply packs (default 25)
 
     Returns:
         Dict with:
@@ -75,6 +80,7 @@ def run_batch(
         - summary_path: path to summary.csv
         - errors_path: path to errors.json
         - results_dir: path to results directory
+        - apply_packs_dir: path to apply packs directory (if enabled)
     """
     from pipelines.job_discovery import run_job_discovery
 
@@ -85,14 +91,18 @@ def run_batch(
     results_dir = out_path / "results"
     results_dir.mkdir(exist_ok=True)
 
+    apply_packs_dir = out_path / "apply_packs" if export_apply_packs else None
+    if apply_packs_dir:
+        apply_packs_dir.mkdir(exist_ok=True)
+
     # Discover candidate folders
     candidate_folders = discover_candidate_folders(candidates_dir)
 
     if not candidate_folders:
         # No candidates found - still write empty files
-        _write_summary_csv(str(out_path / "summary.csv"), [])
+        _write_summary_csv(str(out_path / "summary.csv"), [], export_apply_packs)
         _write_errors_json(str(out_path / "errors.json"), [])
-        return {
+        result = {
             "processed": 0,
             "succeeded": 0,
             "failed": 0,
@@ -100,6 +110,9 @@ def run_batch(
             "errors_path": str(out_path / "errors.json"),
             "results_dir": str(results_dir),
         }
+        if apply_packs_dir:
+            result["apply_packs_dir"] = str(apply_packs_dir)
+        return result
 
     # Process each candidate
     summary_rows = []
@@ -130,24 +143,72 @@ def run_batch(
             with open(results_file, "w", encoding="utf-8") as f:
                 json.dump(result, f, indent=2, sort_keys=True)
 
+            # Generate apply pack if enabled
+            if apply_packs_dir:
+                from jobflow.app.core.apply_pack import build_apply_pack
+                from jobflow.app.core.apply_pack_export import (
+                    write_apply_pack_csv,
+                    write_apply_pack_json,
+                )
+
+                apply_pack = build_apply_pack(result, top_n=top_n)
+
+                # Create candidate apply pack directory
+                candidate_apply_dir = apply_packs_dir / safe_id
+                candidate_apply_dir.mkdir(exist_ok=True)
+
+                # Write JSON and CSV
+                write_apply_pack_json(
+                    apply_pack,
+                    str(candidate_apply_dir / "applications_ready.json")
+                )
+                write_apply_pack_csv(
+                    apply_pack,
+                    str(candidate_apply_dir / "applications_ready.csv")
+                )
+
             # Build summary row
             num_jobs = result["counts"]["jobs"]
             num_errors = result["counts"]["errors"]
             num_matches = result["counts"].get("matches", 0)
 
-            top_score = None
+            top_score = ""
             if match_jobs and result.get("matches"):
-                top_score = result["matches"][0]["overall_score"]
+                matches = result["matches"]
+                top_score = matches[0]["overall_score"] if matches else ""
 
             summary_row = {
                 "candidate_id": candidate_id,
                 "folder": folder_name,
                 "num_jobs": num_jobs,
                 "num_matches": num_matches,
-                "top_score": top_score if top_score is not None else "",
-                "num_errors": num_errors,
-                "status": "success",
+                "top_score": top_score,
             }
+
+            # Add fit counts only if apply packs are enabled
+            if export_apply_packs:
+                num_strong_fit = 0
+                num_possible_fit = 0
+                num_weak_fit = 0
+
+                if match_jobs and result.get("matches"):
+                    # Count decision types
+                    for match in result["matches"]:
+                        decision = match.get("decision", "")
+                        if decision == "strong_fit":
+                            num_strong_fit += 1
+                        elif decision == "possible_fit":
+                            num_possible_fit += 1
+                        elif decision == "weak_fit":
+                            num_weak_fit += 1
+
+                summary_row["num_strong_fit"] = num_strong_fit
+                summary_row["num_possible_fit"] = num_possible_fit
+                summary_row["num_weak_fit"] = num_weak_fit
+
+            summary_row["num_errors"] = num_errors
+            summary_row["status"] = "success"
+
             summary_rows.append(summary_row)
             succeeded += 1
 
@@ -168,21 +229,29 @@ def run_batch(
                 "num_jobs": 0,
                 "num_matches": 0,
                 "top_score": "",
-                "num_errors": 0,
-                "status": "failed",
             }
+
+            # Add fit counts only if apply packs are enabled
+            if export_apply_packs:
+                summary_row["num_strong_fit"] = 0
+                summary_row["num_possible_fit"] = 0
+                summary_row["num_weak_fit"] = 0
+
+            summary_row["num_errors"] = 0
+            summary_row["status"] = "failed"
+
             summary_rows.append(summary_row)
             failed += 1
 
     # Write summary CSV
     summary_path = str(out_path / "summary.csv")
-    _write_summary_csv(summary_path, summary_rows)
+    _write_summary_csv(summary_path, summary_rows, export_apply_packs)
 
     # Write errors JSON
     errors_path = str(out_path / "errors.json")
     _write_errors_json(errors_path, errors)
 
-    return {
+    result = {
         "processed": len(candidate_folders),
         "succeeded": succeeded,
         "failed": failed,
@@ -190,6 +259,11 @@ def run_batch(
         "errors_path": errors_path,
         "results_dir": str(results_dir),
     }
+
+    if apply_packs_dir:
+        result["apply_packs_dir"] = str(apply_packs_dir)
+
+    return result
 
 
 def safe_slug(text: str) -> str:
@@ -263,13 +337,14 @@ def _extract_candidate_id(result: dict, fallback: str) -> str:
     return fallback
 
 
-def _write_summary_csv(path: str, rows: list[dict]):
+def _write_summary_csv(path: str, rows: list[dict], include_fit_counts: bool = False):
     """
     Write summary CSV file.
 
     Args:
         path: Output CSV file path
         rows: List of summary row dicts
+        include_fit_counts: Whether to include fit count columns (for apply packs)
     """
     fieldnames = [
         "candidate_id",
@@ -277,9 +352,19 @@ def _write_summary_csv(path: str, rows: list[dict]):
         "num_jobs",
         "num_matches",
         "top_score",
+    ]
+
+    if include_fit_counts:
+        fieldnames.extend([
+            "num_strong_fit",
+            "num_possible_fit",
+            "num_weak_fit",
+        ])
+
+    fieldnames.extend([
         "num_errors",
         "status",
-    ]
+    ])
 
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

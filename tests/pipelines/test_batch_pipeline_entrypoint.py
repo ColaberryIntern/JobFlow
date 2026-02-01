@@ -196,13 +196,16 @@ def test_batch_pipeline_summary_csv_format(tmp_path):
     # Should have at least one row
     assert len(rows) >= 1
 
-    # Check headers
+    # Check headers (includes fit counts since apply packs are enabled by default)
     expected_headers = {
         "candidate_id",
         "folder",
         "num_jobs",
         "num_matches",
         "top_score",
+        "num_strong_fit",
+        "num_possible_fit",
+        "num_weak_fit",
         "num_errors",
         "status",
     }
