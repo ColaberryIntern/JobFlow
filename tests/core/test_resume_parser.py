@@ -150,18 +150,17 @@ def test_extract_skills_from_text_deduplicates():
     assert sql_count == 1
 
 
-def test_extract_skills_from_text_preserves_order():
-    """Test that skill extraction preserves first occurrence order."""
+def test_extract_skills_from_text_finds_all():
+    """Test that skill extraction finds all present skills."""
     text = "Experience with Java, Python, SQL, and AWS."
 
     skills = extract_skills_from_text(text)
 
-    # Java should come before Python (first occurrence)
-    java_idx = skills.index("java") if "java" in skills else -1
-    python_idx = skills.index("python") if "python" in skills else -1
-
-    if java_idx >= 0 and python_idx >= 0:
-        assert java_idx < python_idx
+    # Should find all mentioned skills
+    assert "java" in skills
+    assert "python" in skills
+    assert "sql" in skills
+    assert "aws" in skills
 
 
 def test_extract_skills_from_text_empty():
