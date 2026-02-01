@@ -482,3 +482,182 @@ def test_run_batch_summary_has_fit_counts(tmp_path):
     assert row["num_strong_fit"].isdigit() or row["num_strong_fit"] == ""
     assert row["num_possible_fit"].isdigit() or row["num_possible_fit"] == ""
     assert row["num_weak_fit"].isdigit() or row["num_weak_fit"] == ""
+
+
+def test_run_batch_creates_application_queue(tmp_path):
+    """Test that batch run creates application queue CSV."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidates_dir = Path(__file__).parent.parent / "fixtures" / "candidates"
+    jobs_file = Path(__file__).parent.parent / "fixtures" / "jobs_sample.json"
+    out_dir = tmp_path / "output"
+
+    source = FileJobSource("jobs", str(jobs_file))
+
+    result = run_batch(
+        candidates_dir=str(candidates_dir),
+        job_sources=[source],
+        out_dir=str(out_dir),
+        match_jobs=True,
+        export_apply_packs=True,
+    )
+
+    # Verify apply packs directory exists
+    apply_packs_dir = Path(result["apply_packs_dir"])
+    assert apply_packs_dir.exists()
+
+    # Verify queue files exist for each candidate
+    candidate_dirs = list(apply_packs_dir.iterdir())
+    assert len(candidate_dirs) >= 1
+
+    for candidate_dir in candidate_dirs:
+        queue_path = candidate_dir / "application_queue.csv"
+        assert queue_path.exists()
+
+        # Verify queue CSV structure
+        with open(queue_path, "r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        # Should have at least one row
+        assert len(rows) >= 1
+
+        # Verify columns
+        assert "job_fingerprint" in rows[0]
+        assert "status" in rows[0]
+        assert "notes" in rows[0]
+        assert "rank" in rows[0]
+
+
+def test_run_batch_rerun_preserves_queue_status(tmp_path):
+    """Test that rerunning batch preserves human-edited status and notes."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidates_dir = Path(__file__).parent.parent / "fixtures" / "candidates"
+    jobs_file = Path(__file__).parent.parent / "fixtures" / "jobs_sample.json"
+    out_dir = tmp_path / "output"
+
+    source = FileJobSource("jobs", str(jobs_file))
+
+    # First run
+    result1 = run_batch(
+        candidates_dir=str(candidates_dir),
+        job_sources=[source],
+        out_dir=str(out_dir),
+        match_jobs=True,
+        export_apply_packs=True,
+    )
+
+    # Find the queue file
+    apply_packs_dir = Path(result1["apply_packs_dir"])
+    candidate_dirs = list(apply_packs_dir.iterdir())
+    queue_path = candidate_dirs[0] / "application_queue.csv"
+
+    # Edit the queue - mark first job as applied with notes
+    with open(queue_path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+
+    # Modify first row
+    rows[0]["status"] = "applied"
+    rows[0]["notes"] = "Submitted on Monday via LinkedIn"
+
+    # Write back
+    with open(queue_path, "w", encoding="utf-8", newline="") as f:
+        from jobflow.app.core.application_queue import QUEUE_COLUMNS
+
+        writer = csv.DictWriter(f, fieldnames=QUEUE_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    # Second run
+    source2 = FileJobSource("jobs", str(jobs_file))
+    result2 = run_batch(
+        candidates_dir=str(candidates_dir),
+        job_sources=[source2],
+        out_dir=str(out_dir),
+        match_jobs=True,
+        export_apply_packs=True,
+    )
+
+    # Read queue after second run
+    with open(queue_path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        rows_after = list(reader)
+
+    # Find the job we edited
+    edited_job = rows_after[0]  # Should still be first due to rank
+
+    # Verify status and notes were preserved
+    assert edited_job["status"] == "applied"
+    assert edited_job["notes"] == "Submitted on Monday via LinkedIn"
+
+    # Verify apply pack files were regenerated
+    assert (candidate_dirs[0] / "applications_ready.json").exists()
+    assert (candidate_dirs[0] / "applications_ready.csv").exists()
+
+
+def test_run_batch_rerun_updates_job_data(tmp_path):
+    """Test that rerunning batch updates job data while preserving status."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidates_dir = Path(__file__).parent.parent / "fixtures" / "candidates"
+    jobs_file = Path(__file__).parent.parent / "fixtures" / "jobs_sample.json"
+    out_dir = tmp_path / "output"
+
+    source = FileJobSource("jobs", str(jobs_file))
+
+    # First run
+    result1 = run_batch(
+        candidates_dir=str(candidates_dir),
+        job_sources=[source],
+        out_dir=str(out_dir),
+        match_jobs=True,
+        export_apply_packs=True,
+    )
+
+    # Get original queue
+    apply_packs_dir = Path(result1["apply_packs_dir"])
+    candidate_dirs = list(apply_packs_dir.iterdir())
+    queue_path = candidate_dirs[0] / "application_queue.csv"
+
+    with open(queue_path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        rows_before = list(reader)
+
+    first_job_fingerprint = rows_before[0]["job_fingerprint"]
+    original_score = rows_before[0]["score"]
+
+    # Edit status
+    rows_before[0]["status"] = "applied"
+
+    with open(queue_path, "w", encoding="utf-8", newline="") as f:
+        from jobflow.app.core.application_queue import QUEUE_COLUMNS
+
+        writer = csv.DictWriter(f, fieldnames=QUEUE_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows_before)
+
+    # Second run (score/rank might change but shouldn't in our test fixtures)
+    source2 = FileJobSource("jobs", str(jobs_file))
+    result2 = run_batch(
+        candidates_dir=str(candidates_dir),
+        job_sources=[source2],
+        out_dir=str(out_dir),
+        match_jobs=True,
+        export_apply_packs=True,
+    )
+
+    # Read queue after second run
+    with open(queue_path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        rows_after = list(reader)
+
+    # Find the same job by fingerprint
+    same_job = next(r for r in rows_after if r["job_fingerprint"] == first_job_fingerprint)
+
+    # Status should be preserved
+    assert same_job["status"] == "applied"
+
+    # Job data should be present (score might be same in our fixtures)
+    assert same_job["score"] != ""

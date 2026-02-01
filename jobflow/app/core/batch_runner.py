@@ -150,6 +150,12 @@ def run_batch(
                     write_apply_pack_csv,
                     write_apply_pack_json,
                 )
+                from jobflow.app.core.application_queue import (
+                    build_queue_rows,
+                    merge_queue,
+                    read_queue_csv,
+                    write_queue_csv,
+                )
 
                 apply_pack = build_apply_pack(result, top_n=top_n)
 
@@ -166,6 +172,13 @@ def run_batch(
                     apply_pack,
                     str(candidate_apply_dir / "applications_ready.csv")
                 )
+
+                # Generate application queue with merge-safe status tracking
+                queue_path = str(candidate_apply_dir / "application_queue.csv")
+                existing_queue = read_queue_csv(queue_path)
+                new_queue_rows = build_queue_rows(apply_pack)
+                merged_queue = merge_queue(existing_queue, new_queue_rows)
+                write_queue_csv(merged_queue, queue_path)
 
             # Build summary row
             num_jobs = result["counts"]["jobs"]

@@ -315,6 +315,91 @@ python -m jobflow.scripts.batch_run \
 
 The CSV format allows easy sorting, filtering, and tracking in spreadsheet software.
 
+### Application Queue
+
+Each candidate's apply pack includes an **application queue** (`application_queue.csv`) with merge-safe status tracking.
+
+#### What Is the Application Queue?
+
+The queue is a CSV file that preserves your application status and notes across reruns:
+- First run: creates queue with `status="queued"` and empty notes
+- You edit the CSV to track progress (applied, interview, etc.)
+- Subsequent runs: **preserve your status/notes** while updating job data
+
+#### Queue Columns
+
+| Column | Description | Preserved on Rerun |
+|--------|-------------|-------------------|
+| job_fingerprint | Unique job identifier | - |
+| rank | Application ranking (1-N) | No (updated) |
+| score | Match score | No (updated) |
+| decision | strong_fit / possible_fit / weak_fit | No (updated) |
+| company | Company name | No (updated) |
+| job_title | Job title | No (updated) |
+| location | Job location | No (updated) |
+| apply_url | Application URL | No (updated) |
+| source | Job source | No (updated) |
+| **status** | Application status | **Yes** |
+| **notes** | Your notes | **Yes** |
+| matched_keywords | Matched skills | No (updated) |
+| missing_keywords | Missing skills | No (updated) |
+
+#### Status Values
+
+Track your progress using these status values:
+- `queued` - Default, not yet applied
+- `applied` - Application submitted
+- `rejected` - Application rejected
+- `interview` - Interview scheduled/completed
+- `offer` - Offer received
+- `withdrawn` - Application withdrawn
+
+You can use custom status values as needed.
+
+#### Rerun Behavior
+
+When you rerun batch processing:
+
+1. **Existing jobs**: Status and notes preserved, other fields updated from new results
+2. **New jobs**: Added with `status="queued"` and empty notes
+3. **Removed jobs**: Kept in queue to preserve your tracking
+
+This allows you to:
+- Re-run when new jobs are posted
+- Update match scores as candidate profile improves
+- Never lose your application tracking data
+
+#### Example Workflow
+
+```bash
+# First run - creates queues
+python -m jobflow.scripts.batch_run \
+  --candidates-dir ./candidates \
+  --jobs ./jobs.json \
+  --out ./results
+
+# Open results/apply_packs/candidate_name/application_queue.csv
+# Update status column: "applied", "interview", etc.
+# Add notes: "Submitted via LinkedIn", "Phone screen scheduled", etc.
+
+# Rerun with updated jobs file
+python -m jobflow.scripts.batch_run \
+  --candidates-dir ./candidates \
+  --jobs ./jobs_updated.json \
+  --out ./results
+
+# Your status and notes are preserved!
+# New jobs appear with status="queued"
+```
+
+#### Best Practices
+
+- Use the queue CSV as your primary tracking tool
+- Update status immediately after actions (applying, interviewing, etc.)
+- Add detailed notes for follow-up context
+- Re-run periodically to catch new jobs
+- Sort by status in Excel to focus on queued applications
+
 ### Notes
 
 - Processing is deterministic: same inputs always produce same outputs
