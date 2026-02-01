@@ -33,3 +33,9 @@ Canonical candidate profile domain model. Normalizes messy candidate data into c
 
 ### candidate_query_builder.py
 Intelligent candidate-to-query builder with title inference and keyword extraction. Automatically infers job titles from skill patterns (Power BI, Python backend, Data Engineering) and extracts keywords from skills and resume text.
+
+### match_result.py
+Frozen dataclass for candidate-job match results with validation. Contains overall score (0-100), decision (strong_fit/possible_fit/weak_fit/reject), dimension scores, explainable reasons, matched/missing keywords, and metadata. Validates score bounds and decision-threshold alignment.
+
+### job_matcher.py
+Deterministic candidate-to-job matching engine with dimension-based scoring. Computes skills overlap (45%), title alignment (25%), location alignment (15%), and seniority alignment (15%) to produce weighted overall score with explainable reasons. Normalizes keywords, extracts technical terms, and generates stable match results.

@@ -438,3 +438,270 @@ def test_run_job_discovery_preserves_job_data(tmp_path):
     assert job["remote"] is True
     assert job["url"] == "https://example.com/job/123"
     assert job["source"] == "linkedin"
+
+
+def test_run_job_discovery_with_matching_enabled(tmp_path):
+    """Test pipeline with matching enabled."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidate = {
+        "email": "jane@example.com",
+        "skills": ["Python", "AWS"],
+        "desired_titles": ["Software Engineer"],
+        "years_experience": 5,
+    }
+
+    jobs_data = [
+        {
+            "title": "Software Engineer",
+            "company": "Tech Corp",
+            "location": "SF",
+            "description": "Python development",
+            "requirements": ["Python", "AWS"],
+        },
+        {
+            "title": "Java Developer",
+            "company": "Other Corp",
+            "location": "NYC",
+            "description": "Java development",
+            "requirements": ["Java", "Spring"],
+        },
+    ]
+
+    jobs_file = tmp_path / "jobs.json"
+    jobs_file.write_text(json.dumps(jobs_data))
+
+    source = FileJobSource("test", str(jobs_file))
+    result = run_job_discovery(candidate, [source], match_jobs=True)
+
+    # Verify matches field exists
+    assert "matches" in result
+    assert isinstance(result["matches"], list)
+
+    # Verify counts includes matches
+    assert "matches" in result["counts"]
+
+    # Should have at least one match (Python job should match)
+    assert len(result["matches"]) >= 1
+
+    # Verify matches are sorted by score descending
+    if len(result["matches"]) > 1:
+        for i in range(len(result["matches"]) - 1):
+            assert result["matches"][i]["overall_score"] >= result["matches"][i + 1]["overall_score"]
+
+
+def test_run_job_discovery_with_matching_filters_rejects(tmp_path):
+    """Test that matching filters out reject decisions."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidate = {
+        "email": "python@example.com",
+        "skills": ["Python"],
+        "desired_titles": ["Python Developer"],
+    }
+
+    jobs_data = [
+        {
+            "title": "Python Developer",
+            "company": "Corp1",
+            "location": "SF",
+            "description": "Python work",
+            "requirements": ["Python"],
+        },
+        {
+            "title": "Java Developer",
+            "company": "Corp2",
+            "location": "NYC",
+            "description": "Java only, no Python",
+            "requirements": ["Java", "Spring", "Hibernate"],
+        },
+    ]
+
+    jobs_file = tmp_path / "jobs.json"
+    jobs_file.write_text(json.dumps(jobs_data))
+
+    source = FileJobSource("test", str(jobs_file))
+    result = run_job_discovery(candidate, [source], match_jobs=True)
+
+    # Should have matches
+    assert len(result["matches"]) >= 1
+
+    # All matches should NOT be rejects
+    for match in result["matches"]:
+        assert match["decision"] != "reject"
+
+
+def test_run_job_discovery_with_matching_includes_job_details(tmp_path):
+    """Test that matches include job details."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidate = {
+        "email": "test@example.com",
+        "skills": ["Python"],
+        "desired_titles": ["Engineer"],
+    }
+
+    jobs_data = [
+        {
+            "title": "Backend Engineer",
+            "company": "TechCo",
+            "location": "San Francisco",
+            "description": "Build systems",
+            "requirements": ["Python"],
+            "url": "https://example.com/job1",
+        }
+    ]
+
+    jobs_file = tmp_path / "jobs.json"
+    jobs_file.write_text(json.dumps(jobs_data))
+
+    source = FileJobSource("test", str(jobs_file))
+    result = run_job_discovery(candidate, [source], match_jobs=True)
+
+    # Should have matches
+    assert len(result["matches"]) >= 1
+
+    match = result["matches"][0]
+
+    # Verify job details included
+    assert "job_title" in match
+    assert "job_company" in match
+    assert "job_location" in match
+    assert "job_url" in match
+
+    assert match["job_title"] == "Backend Engineer"
+    assert match["job_company"] == "TechCo"
+    assert match["job_location"] == "San Francisco"
+    assert match["job_url"] == "https://example.com/job1"
+
+
+def test_run_job_discovery_with_matching_includes_match_details(tmp_path):
+    """Test that matches include scoring and decision details."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidate = {
+        "email": "test@example.com",
+        "skills": ["Python", "AWS"],
+        "desired_titles": ["Software Engineer"],
+    }
+
+    jobs_data = [
+        {
+            "title": "Software Engineer",
+            "company": "Corp",
+            "location": "SF",
+            "description": "Python and AWS",
+            "requirements": ["Python", "AWS"],
+        }
+    ]
+
+    jobs_file = tmp_path / "jobs.json"
+    jobs_file.write_text(json.dumps(jobs_data))
+
+    source = FileJobSource("test", str(jobs_file))
+    result = run_job_discovery(candidate, [source], match_jobs=True)
+
+    assert len(result["matches"]) >= 1
+
+    match = result["matches"][0]
+
+    # Verify match result fields
+    assert "candidate_id" in match
+    assert "job_fingerprint" in match
+    assert "overall_score" in match
+    assert "decision" in match
+    assert "dimension_scores" in match
+    assert "reasons" in match
+    assert "matched_keywords" in match
+    assert "missing_keywords" in match
+
+    # Verify types
+    assert isinstance(match["overall_score"], (int, float))
+    assert isinstance(match["decision"], str)
+    assert isinstance(match["dimension_scores"], dict)
+    assert isinstance(match["reasons"], list)
+    assert isinstance(match["matched_keywords"], list)
+
+
+def test_run_job_discovery_matching_disabled_by_default(tmp_path):
+    """Test that matching is disabled by default."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidate = {
+        "email": "test@example.com",
+        "skills": ["Python"],
+    }
+
+    jobs_data = [
+        {
+            "title": "Engineer",
+            "company": "Corp",
+            "location": "SF",
+            "description": "Work",
+            "requirements": ["Python"],
+        }
+    ]
+
+    jobs_file = tmp_path / "jobs.json"
+    jobs_file.write_text(json.dumps(jobs_data))
+
+    source = FileJobSource("test", str(jobs_file))
+    result = run_job_discovery(candidate, [source])  # No match_jobs parameter
+
+    # Should NOT have matches field
+    assert "matches" not in result
+
+    # Counts should NOT have matches
+    assert "matches" not in result["counts"]
+
+
+def test_run_job_discovery_with_matching_empty_jobs(tmp_path):
+    """Test matching with no jobs."""
+    candidate = {
+        "email": "test@example.com",
+        "skills": ["Python"],
+    }
+
+    result = run_job_discovery(candidate, [], match_jobs=True)
+
+    # Should have empty matches
+    assert "matches" in result
+    assert result["matches"] == []
+    assert result["counts"]["matches"] == 0
+
+
+def test_run_job_discovery_with_matching_all_rejects(tmp_path):
+    """Test matching when all jobs are rejects."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidate = {
+        "email": "python@example.com",
+        "skills": ["Python"],
+    }
+
+    jobs_data = [
+        {
+            "title": "Java Developer",
+            "company": "Corp1",
+            "location": "SF",
+            "description": "Java only",
+            "requirements": ["Java", "Spring", "Hibernate"],
+        },
+        {
+            "title": "C++ Developer",
+            "company": "Corp2",
+            "location": "NYC",
+            "description": "C++ only",
+            "requirements": ["C++", "STL", "Boost"],
+        },
+    ]
+
+    jobs_file = tmp_path / "jobs.json"
+    jobs_file.write_text(json.dumps(jobs_data))
+
+    source = FileJobSource("test", str(jobs_file))
+    result = run_job_discovery(candidate, [source], match_jobs=True)
+
+    # All jobs should be filtered out as rejects
+    assert result["matches"] == []
+    assert result["counts"]["matches"] == 0
