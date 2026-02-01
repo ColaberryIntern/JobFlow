@@ -71,3 +71,73 @@ def get_pipeline_definition():
         None (not implemented)
     """
     return None
+
+
+# ==============================================================================
+# Executable Pipeline Functions
+# ==============================================================================
+
+
+def run_job_discovery(candidate_profile: dict, sources: list) -> dict:
+    """
+    Execute job discovery pipeline for a candidate.
+
+    Orchestrates the complete job discovery workflow:
+    1. Build search query from candidate profile
+    2. Aggregate jobs from multiple sources
+    3. Return structured results with jobs and errors
+
+    This is a deterministic, pure function with no side effects.
+    All I/O is delegated to the provided JobSource implementations.
+
+    Args:
+        candidate_profile: Normalized candidate dict from candidate_intake
+        sources: List of JobSource implementations to aggregate from
+
+    Returns:
+        Dict containing:
+        - status: "ok" (always successful, errors captured separately)
+        - query: Search query dict built from candidate profile
+        - jobs: List of serialized job dicts (using Job.to_dict())
+        - errors: List of error dicts from aggregation
+        - counts: Dict with "jobs" and "errors" counts
+
+    Example:
+        >>> from jobflow.app.core.file_job_source import FileJobSource
+        >>> candidate = {
+        ...     "desired_title": "Software Engineer",
+        ...     "skills_years": {"Python": 5, "AWS": 3}
+        ... }
+        >>> source = FileJobSource("local", "jobs.json")
+        >>> result = run_job_discovery(candidate, [source])
+        >>> result["status"]
+        'ok'
+        >>> len(result["jobs"])
+        10
+    """
+    from jobflow.app.core.job_aggregator import JobAggregator
+    from jobflow.app.core.search_query import build_job_query
+
+    # Step 1: Build search query from candidate profile
+    query = build_job_query(candidate_profile)
+
+    # Step 2: Aggregate jobs from sources with error handling
+    aggregator = JobAggregator(sources)
+    jobs, errors = aggregator.aggregate_with_errors(query)
+
+    # Step 3: Serialize jobs (convert JobPosting instances to dicts)
+    serialized_jobs = [job.to_dict() for job in jobs]
+
+    # Step 4: Build result structure
+    result = {
+        "status": "ok",
+        "query": query,
+        "jobs": serialized_jobs,
+        "errors": errors,
+        "counts": {
+            "jobs": len(jobs),
+            "errors": len(errors),
+        },
+    }
+
+    return result
