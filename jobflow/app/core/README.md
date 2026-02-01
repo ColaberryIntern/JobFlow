@@ -26,4 +26,10 @@ Multi-source job aggregator with fingerprint-based deduplication. Orchestrates f
 File-based JobSource implementation for local fixtures and exports. Reads job postings from JSON files for testing and offline scenarios.
 
 ### search_query.py
-Search query builder that transforms candidate profiles into structured job search queries. Maps candidate preferences and skills to search criteria.
+Search query builder that transforms candidate profiles into structured job search queries. Maps candidate preferences and skills to search criteria. (Legacy - use candidate_query_builder.py for new code)
+
+### candidate_profile.py
+Canonical candidate profile domain model. Normalizes messy candidate data into consistent structure with defensive field handling and flexible key name support.
+
+### candidate_query_builder.py
+Intelligent candidate-to-query builder with title inference and keyword extraction. Automatically infers job titles from skill patterns (Power BI, Python backend, Data Engineering) and extracts keywords from skills and resume text.

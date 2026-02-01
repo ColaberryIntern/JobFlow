@@ -355,7 +355,7 @@ def test_run_job_discovery_with_realistic_fixture(tmp_path):
 
     # Verify query was built correctly
     assert "Backend Engineer" in result["query"]["titles"]
-    assert "Python" in result["query"]["keywords"]
+    assert "python" in result["query"]["keywords"]  # Keywords are lowercase
     assert result["query"]["remote_ok"] is True
 
     # Verify jobs were aggregated (8 unique from 10 total)

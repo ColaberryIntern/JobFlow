@@ -78,12 +78,12 @@ def get_pipeline_definition():
 # ==============================================================================
 
 
-def run_job_discovery(candidate_profile: dict, sources: list) -> dict:
+def run_job_discovery(candidate_or_query, sources: list) -> dict:
     """
     Execute job discovery pipeline for a candidate.
 
     Orchestrates the complete job discovery workflow:
-    1. Build search query from candidate profile
+    1. Build search query from candidate profile (or use provided query)
     2. Aggregate jobs from multiple sources
     3. Return structured results with jobs and errors
 
@@ -91,7 +91,11 @@ def run_job_discovery(candidate_profile: dict, sources: list) -> dict:
     All I/O is delegated to the provided JobSource implementations.
 
     Args:
-        candidate_profile: Normalized candidate dict from candidate_intake
+        candidate_or_query: One of:
+            - CandidateProfile instance
+            - dict with CandidateProfile fields (full_name, email, etc.)
+            - dict with SearchQuery fields (titles, keywords, etc.) [legacy]
+            - dict with old-style fields (desired_title, skills_years, etc.) [legacy]
         sources: List of JobSource implementations to aggregate from
 
     Returns:
@@ -102,24 +106,32 @@ def run_job_discovery(candidate_profile: dict, sources: list) -> dict:
         - errors: List of error dicts from aggregation
         - counts: Dict with "jobs" and "errors" counts
 
-    Example:
-        >>> from jobflow.app.core.file_job_source import FileJobSource
+    Example (new style):
+        >>> from jobflow.app.core.candidate_profile import CandidateProfile
+        >>> candidate = CandidateProfile(
+        ...     full_name="Jane Doe",
+        ...     email="jane@example.com",
+        ...     phone="555-1234",
+        ...     location="SF",
+        ...     desired_titles=["Software Engineer"],
+        ...     skills=["Python", "AWS"]
+        ... )
+        >>> result = run_job_discovery(candidate, [source])
+
+    Example (legacy):
         >>> candidate = {
         ...     "desired_title": "Software Engineer",
         ...     "skills_years": {"Python": 5, "AWS": 3}
         ... }
-        >>> source = FileJobSource("local", "jobs.json")
         >>> result = run_job_discovery(candidate, [source])
-        >>> result["status"]
-        'ok'
-        >>> len(result["jobs"])
-        10
     """
+    from jobflow.app.core.candidate_profile import CandidateProfile
+    from jobflow.app.core.candidate_query_builder import build_search_query
     from jobflow.app.core.job_aggregator import JobAggregator
     from jobflow.app.core.search_query import build_job_query
 
-    # Step 1: Build search query from candidate profile
-    query = build_job_query(candidate_profile)
+    # Step 1: Build search query (handle multiple input formats)
+    query = _build_query_from_input(candidate_or_query)
 
     # Step 2: Aggregate jobs from sources with error handling
     aggregator = JobAggregator(sources)
@@ -141,3 +153,48 @@ def run_job_discovery(candidate_profile: dict, sources: list) -> dict:
     }
 
     return result
+
+
+def _build_query_from_input(candidate_or_query) -> dict:
+    """
+    Build search query from various input formats.
+
+    Handles:
+    - CandidateProfile instance → build_search_query
+    - dict with CandidateProfile fields → build_search_query
+    - dict with SearchQuery fields (titles, keywords) → passthrough
+    - dict with legacy fields (desired_title, skills_years) → build_job_query
+
+    Args:
+        candidate_or_query: Input in one of the supported formats
+
+    Returns:
+        Search query dict
+    """
+    from jobflow.app.core.candidate_profile import CandidateProfile
+    from jobflow.app.core.candidate_query_builder import build_search_query
+    from jobflow.app.core.search_query import build_job_query
+
+    # Handle CandidateProfile instance
+    if isinstance(candidate_or_query, CandidateProfile):
+        return build_search_query(candidate_or_query)
+
+    # Handle dict
+    if isinstance(candidate_or_query, dict):
+        # Check if it's already a SearchQuery (has titles/keywords/remote_ok)
+        if "titles" in candidate_or_query and "keywords" in candidate_or_query:
+            # Already a search query, use as-is
+            return candidate_or_query
+
+        # Check if it's CandidateProfile-style (has full_name, email, etc.)
+        if "full_name" in candidate_or_query or "email" in candidate_or_query:
+            # Convert to CandidateProfile and build query
+            profile = CandidateProfile.from_dict(candidate_or_query)
+            return build_search_query(profile)
+
+        # Otherwise, assume legacy format (desired_title, skills_years, etc.)
+        # Use old build_job_query
+        return build_job_query(candidate_or_query)
+
+    # Fallback: treat as legacy dict
+    return build_job_query(candidate_or_query)
