@@ -292,28 +292,38 @@ class JobPosting:
         """
         Generate deterministic SHA-256 fingerprint.
 
-        Fingerprint is based on normalized job content, excluding 'raw' field.
-        Same normalized content always produces same fingerprint.
+        Fingerprint is based on core job content only, excluding provenance
+        and metadata fields. This enables content-based deduplication across
+        different sources.
+
+        Included fields (core content):
+        - title, company, location, description
+        - requirements
+        - salary_min, salary_max, currency
+        - employment_type, remote
+
+        Excluded fields (provenance/metadata):
+        - source (provenance: which feed)
+        - url (source-specific identifier)
+        - posted_date (temporal metadata)
+        - tags (internal classification)
+        - raw (original data)
 
         Returns:
             64-character hex string (SHA-256 hash)
         """
-        # Create canonical dict without raw
+        # Create canonical dict with core content only
         canonical = {
             "title": self.title,
             "company": self.company,
             "location": self.location,
             "description": self.description,
             "requirements": self.requirements,
-            "url": self.url,
-            "source": self.source,
-            "posted_date": self.posted_date,
             "salary_min": self.salary_min,
             "salary_max": self.salary_max,
             "currency": self.currency,
             "employment_type": self.employment_type,
             "remote": self.remote,
-            "tags": self.tags,
         }
 
         # Create deterministic JSON representation

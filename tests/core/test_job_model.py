@@ -561,14 +561,17 @@ def test_fingerprint_requirements_order_matters():
     assert job1.fingerprint() != job2.fingerprint()
 
 
-def test_fingerprint_tags_order_matters():
-    """Test that tags order affects fingerprint."""
+def test_fingerprint_excludes_provenance_fields():
+    """Test that provenance fields (source, url, posted_date, tags) do NOT affect fingerprint."""
     job1 = JobPosting(
         title="Engineer",
         company="Corp",
         location="NYC",
         description="Work",
         requirements=[],
+        source="linkedin",
+        url="https://linkedin.com/job1",
+        posted_date="2025-01-01",
         tags=["python", "aws"],
     )
 
@@ -578,11 +581,14 @@ def test_fingerprint_tags_order_matters():
         location="NYC",
         description="Work",
         requirements=[],
-        tags=["aws", "python"],  # Different order
+        source="indeed",  # Different source
+        url="https://indeed.com/job2",  # Different URL
+        posted_date="2025-01-15",  # Different date
+        tags=["java", "docker"],  # Different tags
     )
 
-    # Different order should produce different fingerprint
-    assert job1.fingerprint() != job2.fingerprint()
+    # Should have same fingerprint despite different provenance
+    assert job1.fingerprint() == job2.fingerprint()
 
 
 def test_from_raw_missing_optional_fields():
