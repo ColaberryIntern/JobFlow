@@ -1,3 +1,3 @@
 """
-Unit tests for services layer.
+Tests for services module.
 """

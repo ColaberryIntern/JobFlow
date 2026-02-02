@@ -409,3 +409,251 @@ python -m jobflow.scripts.batch_run \
 - Candidate folders are discovered automatically (must contain `.xlsx` or resume files)
 - Candidate ID is derived from email (preferred), name, or folder name
 - Results are sorted alphabetically by candidate folder name
+
+## drive_sync.py
+
+Sync candidate folders from Google Drive to local staging directory (read-only).
+
+### Prerequisites
+
+**1. Google Service Account Setup**
+
+You need a Google service account with read-only Drive access:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create or select a project
+3. Enable Google Drive API
+4. Create a service account:
+   - Go to IAM & Admin > Service Accounts
+   - Click "Create Service Account"
+   - Name it (e.g., "jobflow-drive-readonly")
+   - Grant role: "Viewer" or no role (access controlled via sharing)
+5. Create JSON key:
+   - Click on service account
+   - Keys tab > Add Key > Create new key > JSON
+   - Download JSON file
+
+**2. Share Drive Folder**
+
+Share your root candidate folder with the service account email:
+- Open Google Drive
+- Right-click root folder > Share
+- Add service account email (found in JSON key file)
+- Set permission: "Viewer" (read-only)
+
+**3. Set Environment Variable**
+
+```bash
+# Linux/Mac
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
+
+# Windows (PowerShell)
+$env:GOOGLE_APPLICATION_CREDENTIALS="C:\path\to\service-account-key.json"
+
+# Windows (CMD)
+set GOOGLE_APPLICATION_CREDENTIALS=C:\path\to\service-account-key.json
+```
+
+**4. Install Dependencies**
+
+```bash
+pip install google-api-python-client google-auth
+```
+
+### Required Permissions
+
+The service account requires **read-only** Google Drive access:
+- Scope: `https://www.googleapis.com/auth/drive.readonly`
+- Can list folders and files
+- Can download files
+- **Cannot** create, modify, or delete anything
+
+### Usage
+
+```bash
+python -m jobflow.scripts.drive_sync \
+  --root-folder-id <DRIVE_FOLDER_ID> \
+  --staging ./staged_candidates
+```
+
+### Arguments
+
+- `--root-folder-id` (required): Google Drive folder ID containing candidate folders
+  - Get ID from Drive URL: `https://drive.google.com/drive/folders/<ID>`
+  - Each immediate subfolder is treated as a candidate folder
+
+- `--staging` (required): Local directory to stage candidate files
+  - Will be created if it doesn't exist
+  - Each candidate gets a subdirectory: `staging/<safe_slug(folder_name)>/`
+
+- `--dry-run` (optional): List files but don't download
+  - Useful for previewing what will be synced
+  - No files written to disk
+
+- `--max-candidates` (optional): Limit number of candidates to process
+  - Useful for testing with a subset
+
+### Supported File Types
+
+**Resume Files** (downloaded):
+- `.txt` - Plain text
+- `.md` - Markdown
+- `.docx` - Word document (newer format)
+
+**Application Files** (downloaded):
+- `.xlsx` - Excel spreadsheet
+
+**Deprecated** (skipped with warning):
+- `.doc` - Old Word format (use .docx instead)
+
+**Other Files**: Skipped silently (photos, PDFs, etc.)
+
+### Output
+
+Prints JSON summary to stdout:
+
+```json
+{
+  "status": "success",
+  "root_folder_id": "1ABC123xyz",
+  "staging_dir": "./staged_candidates",
+  "dry_run": false,
+  "processed": 3,
+  "downloaded": 8,
+  "skipped": 2,
+  "warnings": [
+    "Skipped deprecated format: John Doe/resume.doc (.doc not supported, use .docx)"
+  ],
+  "candidates": [
+    {
+      "name": "Anusha Kayam",
+      "slug": "anusha_kayam",
+      "folder_path": "./staged_candidates/anusha_kayam",
+      "drive_folder_id": "1DEF456abc",
+      "files_downloaded": 2,
+      "files_skipped": 0,
+      "files": [
+        {
+          "name": "resume.txt",
+          "path": "./staged_candidates/anusha_kayam/resume.txt",
+          "type": "resume"
+        },
+        {
+          "name": "application.xlsx",
+          "path": "./staged_candidates/anusha_kayam/application.xlsx",
+          "type": "application"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Exit Codes
+
+- `0`: Success (at least one candidate synced)
+- `1`: Error (authentication failure, API error, etc.)
+- `2`: No candidate folders found in Drive folder
+
+### Examples
+
+#### Dry Run (Preview)
+
+```bash
+# See what would be synced without downloading
+python -m jobflow.scripts.drive_sync \
+  --root-folder-id 1ABC123xyz \
+  --staging ./staged_candidates \
+  --dry-run
+```
+
+#### Sync All Candidates
+
+```bash
+# Download all candidate folders
+python -m jobflow.scripts.drive_sync \
+  --root-folder-id 1ABC123xyz \
+  --staging ./staged_candidates
+```
+
+#### Sync Subset
+
+```bash
+# Download first 10 candidates (for testing)
+python -m jobflow.scripts.drive_sync \
+  --root-folder-id 1ABC123xyz \
+  --staging ./staged_candidates \
+  --max-candidates 10
+```
+
+#### Full Workflow: Drive Sync → Batch Processing
+
+```bash
+# 1. Sync candidates from Drive
+python -m jobflow.scripts.drive_sync \
+  --root-folder-id 1ABC123xyz \
+  --staging ./staged_candidates
+
+# 2. Process staged candidates
+python -m jobflow.scripts.batch_run \
+  --candidates-dir ./staged_candidates \
+  --jobs ./jobs.json \
+  --out ./results
+```
+
+### Expected Drive Folder Structure
+
+```
+Root Folder (shared with service account)
+├── Candidate A/
+│   ├── resume.txt
+│   └── application.xlsx
+├── Candidate B/
+│   ├── resume.docx
+│   └── application.xlsx
+└── Candidate C/
+    ├── resume.md
+    └── application.xlsx
+```
+
+After sync:
+
+```
+staged_candidates/
+├── candidate_a/
+│   ├── resume.txt
+│   └── application.xlsx
+├── candidate_b/
+│   ├── resume.docx
+│   └── application.xlsx
+└── candidate_c/
+    ├── resume.md
+    └── application.xlsx
+```
+
+### Troubleshooting
+
+**Error: "GOOGLE_APPLICATION_CREDENTIALS environment variable not set"**
+- Set the environment variable pointing to your service account JSON key
+- Make sure the path is absolute and the file exists
+
+**Error: "Credentials file not found"**
+- Check that the path in `GOOGLE_APPLICATION_CREDENTIALS` is correct
+- Verify the JSON key file exists at that location
+
+**Error: "No candidate folders found"**
+- Check the Drive folder ID is correct
+- Verify the service account has access (folder is shared)
+- Ensure immediate subfolders exist (not files at root level)
+
+**Files Not Downloading**
+- Check file extensions are supported (.txt, .md, .docx, .xlsx)
+- .doc files are intentionally skipped (use .docx)
+- Other file types are skipped silently
+
+### Security Notes
+
+- **Never commit credentials**: Service account JSON keys are automatically ignored by `.gitignore`
+- **Read-only scope**: Cannot modify or delete Drive contents
+- **Local staging**: Downloaded files are stored locally (add to .gitignore if needed)
+- **No secrets in repo**: Never hardcode Drive folder IDs or credentials in code
