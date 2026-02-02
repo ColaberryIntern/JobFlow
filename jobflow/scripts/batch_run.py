@@ -77,6 +77,13 @@ Examples:
         help="Number of top jobs to include in apply packs (default: 25)",
     )
 
+    parser.add_argument(
+        "--company-domain",
+        action="append",
+        dest="company_domains",
+        help="Known company domain to allowlist for URL validation (can be specified multiple times)",
+    )
+
     args = parser.parse_args(argv)
 
     try:
@@ -120,6 +127,7 @@ Examples:
         # Run batch processing
         match_jobs = not args.no_match
         export_apply_packs = not args.no_apply_pack
+        company_domains = set(args.company_domains) if args.company_domains else None
 
         batch_result = run_batch(
             candidates_dir=str(candidates_dir),
@@ -128,6 +136,7 @@ Examples:
             match_jobs=match_jobs,
             export_apply_packs=export_apply_packs,
             top_n=args.top_n,
+            company_domains=company_domains,
         )
 
         # Build output

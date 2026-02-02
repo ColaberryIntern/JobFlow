@@ -152,6 +152,8 @@ def test_write_apply_pack_csv_headers_only(tmp_path):
             "location",
             "apply_url",
             "source",
+            "url_policy",
+            "url_reason",
             "reasons",
             "matched_keywords",
             "missing_keywords",
@@ -200,3 +202,61 @@ def test_write_apply_pack_csv_graceful_missing_fields(tmp_path):
     assert row["company"] == ""
     assert row["score"] == ""
     assert row["reasons"] == ""
+
+
+def test_write_apply_pack_csv_includes_url_policy_fields(tmp_path):
+    """Test that CSV export includes url_policy and url_reason fields."""
+    pack = {
+        "applications": [
+            {
+                "rank": 1,
+                "score": 95.0,
+                "decision": "strong_fit",
+                "company": "TechCorp",
+                "job_title": "Engineer",
+                "location": "Remote",
+                "apply_url": "https://greenhouse.io/job/1",
+                "source": "jobs_file",
+                "url_policy": "allowed",
+                "url_reason": "known_ats",
+                "reasons": [],
+                "matched_keywords": ["python"],
+                "missing_keywords": [],
+            },
+            {
+                "rank": 2,
+                "score": 80.0,
+                "decision": "possible_fit",
+                "company": "UnknownCo",
+                "job_title": "Developer",
+                "location": "NYC",
+                "apply_url": "https://unknown.com/job/2",
+                "source": "jobs_file",
+                "url_policy": "manual_review",
+                "url_reason": "unknown_domain",
+                "reasons": [],
+                "matched_keywords": [],
+                "missing_keywords": [],
+            },
+        ]
+    }
+
+    output_path = tmp_path / "applications.csv"
+    write_apply_pack_csv(pack, str(output_path))
+
+    # Verify CSV content includes URL fields
+    with open(output_path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+
+    assert len(rows) == 2
+
+    # Verify first row has URL policy fields
+    row1 = rows[0]
+    assert row1["url_policy"] == "allowed"
+    assert row1["url_reason"] == "known_ats"
+
+    # Verify second row
+    row2 = rows[1]
+    assert row2["url_policy"] == "manual_review"
+    assert row2["url_reason"] == "unknown_domain"

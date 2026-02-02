@@ -315,3 +315,34 @@ def test_batch_run_cli_default_apply_packs_enabled(tmp_path, monkeypatch, capsys
 
     assert result["export_apply_packs"] is True
     assert "apply_packs_dir" in result
+
+
+def test_batch_run_cli_with_company_domain_flag(tmp_path, monkeypatch, capsys):
+    """Test CLI with --company-domain flag."""
+    from jobflow.scripts.batch_run import main
+
+    candidates_dir = Path(__file__).parent.parent / "fixtures" / "candidates"
+    jobs_file = Path(__file__).parent.parent / "fixtures" / "jobs_sample.json"
+    out_dir = tmp_path / "output"
+
+    argv = [
+        "--candidates-dir", str(candidates_dir),
+        "--jobs", str(jobs_file),
+        "--out", str(out_dir),
+        "--company-domain", "acme.com",
+        "--company-domain", "techcorp.io",
+    ]
+
+    exit_code = main(argv)
+
+    assert exit_code == 0
+
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+
+    # Verify success
+    assert result["status"] == "success"
+
+    # Verify output files exist
+    assert Path(result["summary_path"]).exists()
+    assert Path(result["apply_packs_dir"]).exists()

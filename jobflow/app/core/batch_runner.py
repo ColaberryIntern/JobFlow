@@ -53,7 +53,8 @@ def run_batch(
     out_dir: str,
     match_jobs: bool = True,
     export_apply_packs: bool = True,
-    top_n: int = 25
+    top_n: int = 25,
+    company_domains: set[str] | None = None
 ) -> dict:
     """
     Run batch candidate processing.
@@ -71,6 +72,7 @@ def run_batch(
         match_jobs: Whether to compute match scores (default True)
         export_apply_packs: Whether to generate apply pack exports (default True)
         top_n: Number of top jobs to include in apply packs (default 25)
+        company_domains: Optional set of known company domains for URL allowlisting
 
     Returns:
         Dict with:
@@ -157,7 +159,7 @@ def run_batch(
                     write_queue_csv,
                 )
 
-                apply_pack = build_apply_pack(result, top_n=top_n)
+                apply_pack = build_apply_pack(result, top_n=top_n, company_domains=company_domains)
 
                 # Create candidate apply pack directory
                 candidate_apply_dir = apply_packs_dir / safe_id
@@ -198,7 +200,7 @@ def run_batch(
                 "top_score": top_score,
             }
 
-            # Add fit counts only if apply packs are enabled
+            # Add fit counts and URL counts only if apply packs are enabled
             if export_apply_packs:
                 num_strong_fit = 0
                 num_possible_fit = 0
@@ -218,6 +220,12 @@ def run_batch(
                 summary_row["num_strong_fit"] = num_strong_fit
                 summary_row["num_possible_fit"] = num_possible_fit
                 summary_row["num_weak_fit"] = num_weak_fit
+
+                # Add URL review counts from apply pack
+                url_review = apply_pack.get("url_review_summary", {})
+                summary_row["num_url_allowed"] = url_review.get("allowed", 0)
+                summary_row["num_url_manual_review"] = url_review.get("manual_review", 0)
+                summary_row["num_url_blocked"] = url_review.get("blocked", 0)
 
             summary_row["num_errors"] = num_errors
             summary_row["status"] = "success"
@@ -244,11 +252,14 @@ def run_batch(
                 "top_score": "",
             }
 
-            # Add fit counts only if apply packs are enabled
+            # Add fit counts and URL counts only if apply packs are enabled
             if export_apply_packs:
                 summary_row["num_strong_fit"] = 0
                 summary_row["num_possible_fit"] = 0
                 summary_row["num_weak_fit"] = 0
+                summary_row["num_url_allowed"] = 0
+                summary_row["num_url_manual_review"] = 0
+                summary_row["num_url_blocked"] = 0
 
             summary_row["num_errors"] = 0
             summary_row["status"] = "failed"
@@ -372,6 +383,9 @@ def _write_summary_csv(path: str, rows: list[dict], include_fit_counts: bool = F
             "num_strong_fit",
             "num_possible_fit",
             "num_weak_fit",
+            "num_url_allowed",
+            "num_url_manual_review",
+            "num_url_blocked",
         ])
 
     fieldnames.extend([

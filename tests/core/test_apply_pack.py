@@ -296,5 +296,199 @@ def test_build_apply_pack_checklist_all_strong_fit():
 
     pack = build_apply_pack(discovery_result, top_n=25)
 
-    # No manual review needed - all strong fits
+    # No manual review needed - all strong fits (and no manual_review URLs)
     assert pack["checklist"]["needs_manual_review"] is False
+
+
+def test_build_apply_pack_url_validation_known_ats():
+    """Test that URL validation works for known ATS domains."""
+    discovery_result = {
+        "candidate": {"name": "Test"},
+        "matches": [
+            {
+                "job_title": "Engineer",
+                "job_company": "TechCorp",
+                "job_url": "https://boards.greenhouse.io/techcorp/jobs/123",
+                "overall_score": 90.0,
+                "decision": "strong_fit",
+            },
+        ],
+        "counts": {"jobs": 1, "matches": 1, "errors": 0},
+    }
+
+    pack = build_apply_pack(discovery_result, top_n=25)
+
+    app = pack["applications"][0]
+    assert app["url_valid"] is True
+    assert app["url_domain"] == "boards.greenhouse.io"
+    assert app["url_policy"] == "allowed"
+    assert app["url_reason"] == "known_ats"
+
+    # Verify url_review_summary
+    assert pack["url_review_summary"]["allowed"] == 1
+    assert pack["url_review_summary"]["manual_review"] == 0
+    assert pack["url_review_summary"]["blocked"] == 0
+
+
+def test_build_apply_pack_url_validation_unknown_domain():
+    """Test that unknown domains are flagged for manual review."""
+    discovery_result = {
+        "candidate": {"name": "Test"},
+        "matches": [
+            {
+                "job_title": "Engineer",
+                "job_company": "UnknownCorp",
+                "job_url": "https://unknown-company.com/careers",
+                "overall_score": 90.0,
+                "decision": "strong_fit",
+            },
+        ],
+        "counts": {"jobs": 1, "matches": 1, "errors": 0},
+    }
+
+    pack = build_apply_pack(discovery_result, top_n=25)
+
+    app = pack["applications"][0]
+    assert app["url_valid"] is True
+    assert app["url_domain"] == "unknown-company.com"
+    assert app["url_policy"] == "manual_review"
+    assert app["url_reason"] == "unknown_domain"
+
+    # Verify url_review_summary
+    assert pack["url_review_summary"]["allowed"] == 0
+    assert pack["url_review_summary"]["manual_review"] == 1
+    assert pack["url_review_summary"]["blocked"] == 0
+
+    # needs_manual_review should be True (unknown URL)
+    assert pack["checklist"]["needs_manual_review"] is True
+
+
+def test_build_apply_pack_url_validation_blocked():
+    """Test that invalid URLs are blocked."""
+    discovery_result = {
+        "candidate": {"name": "Test"},
+        "matches": [
+            {
+                "job_title": "Engineer",
+                "job_company": "BadCorp",
+                "job_url": "http://bad-company.com/job",  # Non-HTTPS
+                "overall_score": 90.0,
+                "decision": "strong_fit",
+            },
+        ],
+        "counts": {"jobs": 1, "matches": 1, "errors": 0},
+    }
+
+    pack = build_apply_pack(discovery_result, top_n=25)
+
+    app = pack["applications"][0]
+    assert app["url_valid"] is False
+    assert app["url_domain"] == ""
+    assert app["url_policy"] == "blocked"
+    assert app["url_reason"] == "non_https"
+
+    # Verify url_review_summary
+    assert pack["url_review_summary"]["allowed"] == 0
+    assert pack["url_review_summary"]["manual_review"] == 0
+    assert pack["url_review_summary"]["blocked"] == 1
+
+
+def test_build_apply_pack_url_validation_company_domains():
+    """Test that company domains are allowed."""
+    discovery_result = {
+        "candidate": {"name": "Test"},
+        "matches": [
+            {
+                "job_title": "Engineer",
+                "job_company": "AcmeCorp",
+                "job_url": "https://acme.com/careers/job/123",
+                "overall_score": 90.0,
+                "decision": "strong_fit",
+            },
+        ],
+        "counts": {"jobs": 1, "matches": 1, "errors": 0},
+    }
+
+    company_domains = {"acme.com", "techcorp.io"}
+    pack = build_apply_pack(discovery_result, top_n=25, company_domains=company_domains)
+
+    app = pack["applications"][0]
+    assert app["url_valid"] is True
+    assert app["url_domain"] == "acme.com"
+    assert app["url_policy"] == "allowed"
+    assert app["url_reason"] == "company_domain"
+
+    # Verify url_review_summary
+    assert pack["url_review_summary"]["allowed"] == 1
+    assert pack["url_review_summary"]["manual_review"] == 0
+    assert pack["url_review_summary"]["blocked"] == 0
+
+
+def test_build_apply_pack_url_validation_mixed():
+    """Test URL validation with mixed policy results."""
+    discovery_result = {
+        "candidate": {"name": "Test"},
+        "matches": [
+            {
+                "job_title": "Job 1",
+                "job_company": "Company1",
+                "job_url": "https://greenhouse.io/job1",  # Known ATS
+                "overall_score": 95.0,
+                "decision": "strong_fit",
+            },
+            {
+                "job_title": "Job 2",
+                "job_company": "Company2",
+                "job_url": "https://unknown.com/job2",  # Unknown
+                "overall_score": 90.0,
+                "decision": "strong_fit",
+            },
+            {
+                "job_title": "Job 3",
+                "job_company": "Company3",
+                "job_url": "http://bad.com/job3",  # Blocked
+                "overall_score": 85.0,
+                "decision": "strong_fit",
+            },
+        ],
+        "counts": {"jobs": 3, "matches": 3, "errors": 0},
+    }
+
+    pack = build_apply_pack(discovery_result, top_n=25)
+
+    # Verify url_review_summary counts
+    assert pack["url_review_summary"]["allowed"] == 1
+    assert pack["url_review_summary"]["manual_review"] == 1
+    assert pack["url_review_summary"]["blocked"] == 1
+
+    # needs_manual_review should be True (has manual_review URL)
+    assert pack["checklist"]["needs_manual_review"] is True
+
+
+def test_build_apply_pack_url_validation_fallback_to_jobs():
+    """Test URL validation works with jobs fallback."""
+    discovery_result = {
+        "candidate": {"name": "Test"},
+        "jobs": [
+            {
+                "title": "Engineer",
+                "company": "TechCorp",
+                "url": "https://lever.co/techcorp/job",
+                "source": "jobs_file",
+            },
+        ],
+        "counts": {"jobs": 1, "matches": 0, "errors": 0},
+    }
+
+    pack = build_apply_pack(discovery_result, top_n=25)
+
+    app = pack["applications"][0]
+    assert app["url_valid"] is True
+    assert app["url_domain"] == "lever.co"
+    assert app["url_policy"] == "allowed"
+    assert app["url_reason"] == "known_ats"
+
+    # Verify url_review_summary
+    assert pack["url_review_summary"]["allowed"] == 1
+    assert pack["url_review_summary"]["manual_review"] == 0
+    assert pack["url_review_summary"]["blocked"] == 0

@@ -5,8 +5,14 @@ Transforms job discovery results into structured application packets
 ready for candidate review and submission.
 """
 
+from jobflow.app.core.url_policy import evaluate_apply_url
 
-def build_apply_pack(discovery_result: dict, top_n: int = 25) -> dict:
+
+def build_apply_pack(
+    discovery_result: dict,
+    top_n: int = 25,
+    company_domains: set[str] | None = None
+) -> dict:
     """
     Build a submission-ready application pack from discovery results.
 
@@ -16,6 +22,7 @@ def build_apply_pack(discovery_result: dict, top_n: int = 25) -> dict:
     Args:
         discovery_result: Output from job_discovery pipeline (dict with candidate, jobs, matches)
         top_n: Maximum number of applications to include (default: 25)
+        company_domains: Optional set of known company domains to allowlist
 
     Returns:
         Dictionary with keys:
@@ -23,6 +30,7 @@ def build_apply_pack(discovery_result: dict, top_n: int = 25) -> dict:
             - top_n: Number of applications included
             - applications: List of application entries sorted by score (desc)
             - checklist: Pre-submission checklist with autofill data
+            - url_review_summary: Counts of URL policy results
 
     Notes:
         - Uses matches if present; falls back to jobs if no matching
@@ -44,6 +52,11 @@ def build_apply_pack(discovery_result: dict, top_n: int = 25) -> dict:
     # Build applications list from matches or jobs
     applications = []
 
+    # Track URL policy counts
+    url_allowed = 0
+    url_manual_review = 0
+    url_blocked = 0
+
     if "matches" in discovery_result and discovery_result["matches"]:
         # Use matches (scored and ranked)
         matches = discovery_result["matches"]
@@ -58,12 +71,25 @@ def build_apply_pack(discovery_result: dict, top_n: int = 25) -> dict:
         top_matches = sorted_matches[:top_n]
 
         for rank, match in enumerate(top_matches, start=1):
+            apply_url = match.get("job_url", "")
+
+            # Evaluate URL policy
+            url_eval = evaluate_apply_url(apply_url, company_domains)
+
+            # Track counts
+            if url_eval["url_policy"] == "allowed":
+                url_allowed += 1
+            elif url_eval["url_policy"] == "manual_review":
+                url_manual_review += 1
+            elif url_eval["url_policy"] == "blocked":
+                url_blocked += 1
+
             app = {
                 "rank": rank,
                 "job_title": match.get("job_title", ""),
                 "company": match.get("job_company", ""),
                 "location": match.get("job_location", ""),
-                "apply_url": match.get("job_url", ""),
+                "apply_url": apply_url,
                 "source": match.get("source", ""),
                 "score": match.get("overall_score", 0),
                 "decision": match.get("decision", ""),
@@ -72,6 +98,11 @@ def build_apply_pack(discovery_result: dict, top_n: int = 25) -> dict:
                 "missing_keywords": match.get("missing_keywords", []),
                 "job_fingerprint": match.get("job_fingerprint", ""),
                 "notes": "",  # Reserved for human annotation
+                # URL policy fields
+                "url_valid": url_eval["url_valid"],
+                "url_domain": url_eval["url_domain"],
+                "url_policy": url_eval["url_policy"],
+                "url_reason": url_eval["url_reason"],
             }
             applications.append(app)
 
@@ -86,12 +117,25 @@ def build_apply_pack(discovery_result: dict, top_n: int = 25) -> dict:
         top_jobs = sorted_jobs[:top_n]
 
         for rank, job in enumerate(top_jobs, start=1):
+            apply_url = job.get("url", "")
+
+            # Evaluate URL policy
+            url_eval = evaluate_apply_url(apply_url, company_domains)
+
+            # Track counts
+            if url_eval["url_policy"] == "allowed":
+                url_allowed += 1
+            elif url_eval["url_policy"] == "manual_review":
+                url_manual_review += 1
+            elif url_eval["url_policy"] == "blocked":
+                url_blocked += 1
+
             app = {
                 "rank": rank,
                 "job_title": job.get("title", ""),
                 "company": job.get("company", ""),
                 "location": job.get("location", ""),
-                "apply_url": job.get("url", ""),
+                "apply_url": apply_url,
                 "source": job.get("source", ""),
                 "score": 0,
                 "decision": "",
@@ -100,6 +144,11 @@ def build_apply_pack(discovery_result: dict, top_n: int = 25) -> dict:
                 "missing_keywords": [],
                 "job_fingerprint": job.get("fingerprint", ""),
                 "notes": "",
+                # URL policy fields
+                "url_valid": url_eval["url_valid"],
+                "url_domain": url_eval["url_domain"],
+                "url_policy": url_eval["url_policy"],
+                "url_reason": url_eval["url_reason"],
             }
             applications.append(app)
 
@@ -112,8 +161,9 @@ def build_apply_pack(discovery_result: dict, top_n: int = 25) -> dict:
     has_resume = bool(raw_data.get("resume_path") or raw_data.get("resume_text_excerpt"))
 
     # Check if any top applications need manual review
+    # (either weak decision OR unknown URL domain)
     needs_manual_review = any(
-        app.get("decision") != "strong_fit"
+        app.get("decision") != "strong_fit" or app.get("url_policy") == "manual_review"
         for app in applications
     )
 
@@ -126,12 +176,20 @@ def build_apply_pack(discovery_result: dict, top_n: int = 25) -> dict:
         "needs_manual_review": needs_manual_review,
     }
 
+    # Build URL review summary
+    url_review_summary = {
+        "allowed": url_allowed,
+        "manual_review": url_manual_review,
+        "blocked": url_blocked,
+    }
+
     # Build final pack
     pack = {
         "candidate": candidate_safe,
         "top_n": len(applications),
         "applications": applications,
         "checklist": checklist,
+        "url_review_summary": url_review_summary,
     }
 
     return pack

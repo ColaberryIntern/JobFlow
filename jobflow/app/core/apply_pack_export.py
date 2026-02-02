@@ -39,7 +39,7 @@ def write_apply_pack_csv(pack: dict, path: str) -> None:
 
     CSV Columns:
         rank, score, decision, company, job_title, location, apply_url, source,
-        reasons, matched_keywords, missing_keywords
+        url_policy, url_reason, reasons, matched_keywords, missing_keywords
 
     Notes:
         - Creates parent directories if needed
@@ -61,6 +61,8 @@ def write_apply_pack_csv(pack: dict, path: str) -> None:
         "location",
         "apply_url",
         "source",
+        "url_policy",
+        "url_reason",
         "reasons",
         "matched_keywords",
         "missing_keywords",
@@ -81,6 +83,8 @@ def write_apply_pack_csv(pack: dict, path: str) -> None:
                 "location": app.get("location", ""),
                 "apply_url": app.get("apply_url", ""),
                 "source": app.get("source", ""),
+                "url_policy": app.get("url_policy", ""),
+                "url_reason": app.get("url_reason", ""),
                 "reasons": "; ".join(app.get("reasons", [])),
                 "matched_keywords": "; ".join(app.get("matched_keywords", [])),
                 "missing_keywords": "; ".join(app.get("missing_keywords", [])),

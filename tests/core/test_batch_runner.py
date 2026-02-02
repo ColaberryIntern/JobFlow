@@ -484,6 +484,43 @@ def test_run_batch_summary_has_fit_counts(tmp_path):
     assert row["num_weak_fit"].isdigit() or row["num_weak_fit"] == ""
 
 
+def test_run_batch_summary_includes_url_counts(tmp_path):
+    """Test that summary CSV includes URL count columns when apply packs enabled."""
+    from jobflow.app.core.file_job_source import FileJobSource
+
+    candidates_dir = Path(__file__).parent.parent / "fixtures" / "candidates"
+    jobs_file = Path(__file__).parent.parent / "fixtures" / "jobs_sample.json"
+    out_dir = tmp_path / "output"
+
+    source = FileJobSource("jobs", str(jobs_file))
+
+    result = run_batch(
+        candidates_dir=str(candidates_dir),
+        job_sources=[source],
+        out_dir=str(out_dir),
+        match_jobs=True,
+        export_apply_packs=True,
+    )
+
+    # Verify summary CSV has URL count columns
+    with open(result["summary_path"], "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+
+    assert len(rows) >= 1
+    row = rows[0]
+
+    # Verify URL count columns exist
+    assert "num_url_allowed" in row
+    assert "num_url_manual_review" in row
+    assert "num_url_blocked" in row
+
+    # Verify values are numbers or empty
+    assert row["num_url_allowed"].isdigit() or row["num_url_allowed"] == ""
+    assert row["num_url_manual_review"].isdigit() or row["num_url_manual_review"] == ""
+    assert row["num_url_blocked"].isdigit() or row["num_url_blocked"] == ""
+
+
 def test_run_batch_creates_application_queue(tmp_path):
     """Test that batch run creates application queue CSV."""
     from jobflow.app.core.file_job_source import FileJobSource
